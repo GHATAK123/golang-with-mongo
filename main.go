@@ -3,12 +3,18 @@ package main
 import (
 	"Movie-Management-System/database"
 	"Movie-Management-System/routes"
+	"log"
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file")
+	}
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
