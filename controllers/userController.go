@@ -140,3 +140,56 @@ func Signup() gin.HandlerFunc {
 	}
 
 }
+
+func ConfirmPassword(userPassword string, passwordEntered string) (bool, string) {
+	err := bcrypt.CompareHashAndPassword([]byte(passwordEntered), []byte(userPassword))
+	check := true
+	msg := ""
+
+	if err != nil {
+		msg = "Looks like you entered a wrong"
+		check = false
+	}
+	return check, msg
+}
+
+// User Login
+func Login() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		var user models.User
+		var retrievedUser models.User
+		defer cancel()
+		if err := c.BindJSON(&user); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		err := userCollection.FindOne(ctx, bson.M{"email": user.Email}).Decode(&retrievedUser)
+		defer cancel()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "your email or password is incorrect"})
+			return
+		}
+
+		passwordIsValid, msg := ConfirmPassword(*user.Password, *retrievedUser.Password)
+		defer cancel()
+		if passwordIsValid != true {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": msg})
+			return
+		}
+
+		if retrievedUser.Email == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "oops account not found"})
+		}
+		token, refreshToken, _ := helper.GenerateAllToken(*retrievedUser.Email, *retrievedUser.Name, *retrievedUser.UserName, *retrievedUser.User_type, retrievedUser.User_id)
+		helper.UpdateTokens(token, refreshToken, retrievedUser.User_id)
+		err = userCollection.FindOne(ctx, bson.M{"user_id": retrievedUser.User_id}).Decode(&retrievedUser)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, retrievedUser)
+	}
+}
